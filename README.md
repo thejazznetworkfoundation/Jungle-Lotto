@@ -44,6 +44,10 @@ Open `index.html` in a browser.
   `https://www.atariage.com/manual_html_page.php?SoftwareLabelID=360`
 - AtariAge poster/source thread used as source provenance and visual reference:
   `https://forums.atariage.com/topic/204513-pitfall-source-code-poster/`
+- Meatfighter's browser port/reference repo, useful for implementation ideas but not a strict original-behavior source:
+  `https://github.com/meatfighter/pitfall-js`
+- Meatfighter's project page, which explicitly documents where that browser port differs from the 1982 game:
+  `https://meatfighter.com/pitfall-web/`
 
 ## Note
 
