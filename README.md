@@ -20,7 +20,7 @@ Open `index.html` in a browser.
 
 - Reversible scene generation based on the original `Pitfall!` LFSR approach.
 - Ladder, liana, pit, crocodile, quicksand, treasure, and underground route scenes.
-- Jump direction locks at takeoff to better match the original `Pitfall!` feel.
+- Jumping keeps a tiny early steer window to better match the original `Pitfall!` croc-jump feel.
 - Hole scenes drop Harry into the tunnel route, which still skips three scenes underground.
 - A dedicated LottoMind hero sprite plus custom croc, cobra, and scorpion enemy art.
 - LottoMind-specific HUD, scene callouts, and branded presentation.

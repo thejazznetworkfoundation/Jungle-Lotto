@@ -59,19 +59,23 @@ const JUMP_TABLE = [
 ];
 
 const CROC_HEADS = [60, 76, 92];
-const CROC_OPEN_BOUNDS = [[44, 61], [64, 77], [80, 93], [96, 107]];
+const CROC_OPEN_BOUNDS = [[44, 59], [64, 75], [80, 91], [96, 107]];
 const QUICKSAND_WIDTHS = [12, 16, 20, 28, 20, 16];
 
 const TUNING = {
-  ladderGrabRange: 10,
+  runSpeed: 1,
+  jumpSpeed: 1,
+  jumpSteerFrames: 2,
+  ladderGrabRange: 7,
   ladderStepInterval: 8,
   ladderStepAmount: 2,
   lianaCatchX: 13,
   lianaCatchY: 20,
   pitInset: 2,
-  quicksandMovingRate: 0.28,
-  quicksandStandingRate: 0.62,
-  quicksandThreshold: 1.65,
+  quicksandMovingRate: 0.16,
+  quicksandStandingRate: 0.42,
+  quicksandThreshold: 2.3,
+  quicksandReleaseRate: 0.5,
   logJumpClearance: 12,
   fireJumpClearance: 15,
   cobraJumpClearance: 17,
@@ -81,7 +85,8 @@ const TUNING = {
   deathFrames: 70,
   holeDropSpeed: 1.2,
   deathFallSpeed: 2.2,
-  crocCycleFrames: 64,
+  crocCycleFrames: 128,
+  ladderExitJumpIndex: 1,
 };
 
 const sceneNames = [
@@ -210,6 +215,7 @@ const state = {
     mode: "ground",
     jumpIndex: -1,
     jumpDirection: 0,
+    jumpSteerFrames: 0,
     respawnUnderground: false,
     invulnerabilityFrames: 0,
     stumbleFrames: 0,
@@ -395,6 +401,7 @@ function resetPlayerForRun() {
   state.player.mode = "ground";
   state.player.jumpIndex = -1;
   state.player.jumpDirection = 0;
+  state.player.jumpSteerFrames = 0;
   state.player.respawnUnderground = false;
   state.player.invulnerabilityFrames = 0;
   state.player.stumbleFrames = 0;
@@ -433,7 +440,7 @@ function startGame() {
   pauseOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
   setStatus("Run live");
-  addFeed("Run Live", "Jump locks your direction, holes drop you underground, and crocodiles now work like stepping stones.");
+  addFeed("Run Live", "Harry keeps a tiny post-takeoff steer window, holes drop you underground, and crocodiles now time out more like the original run.");
   requestAnimationFrame(loop);
 }
 
@@ -487,8 +494,8 @@ function consumeQueuedInput(key) {
 
 function currentHazardBounds() {
   if (state.scene.sceneType === 4) {
-    const crocClosed = Math.floor(state.frameCount / TUNING.crocCycleFrames) % 2 === 0;
-    return crocClosed ? holeBounds[4] : CROC_OPEN_BOUNDS;
+    const crocOpen = (state.frameCount & 0x80) === 0;
+    return crocOpen ? CROC_OPEN_BOUNDS : holeBounds[4];
   }
 
   if (state.scene.sceneType === 5 || state.scene.sceneType === 6 || state.scene.sceneType === 7) {
@@ -549,6 +556,7 @@ function startJump(direction, startIndex = 0) {
   state.player.mode = "jump";
   state.player.jumpIndex = startIndex;
   state.player.jumpDirection = direction === 0 ? state.player.facing : direction;
+  state.player.jumpSteerFrames = TUNING.jumpSteerFrames;
   state.player.facing = state.player.jumpDirection;
 }
 
@@ -569,6 +577,7 @@ function startHoleDrop() {
   state.pendingMessage = "Dropped through a hole into the tunnel. -100.";
   changeScore(-100);
   state.player.jumpIndex = -1;
+  state.player.jumpSteerFrames = 0;
   state.sinkMeter = 0;
   setStatus("Falling underground");
   addFeed("Hole Drop", "Harry missed the hole jump and dropped to the tunnel for a 100-point penalty.");
@@ -604,6 +613,7 @@ function respawnHarry() {
   state.player.mode = "ground";
   state.player.jumpIndex = -1;
   state.player.jumpDirection = 0;
+  state.player.jumpSteerFrames = 0;
   state.player.invulnerabilityFrames = 75;
   state.player.stumbleFrames = 0;
   state.player.deathFrames = 0;
@@ -638,6 +648,7 @@ function advanceScene(direction) {
   state.player.mode = "ground";
   state.player.jumpIndex = -1;
   state.player.jumpDirection = 0;
+  state.player.jumpSteerFrames = 0;
   state.sinkMeter = 0;
   enterScene(true);
 }
@@ -697,12 +708,21 @@ function updateGroundMovement() {
     state.player.facing = horizontal;
   }
 
-  state.player.x += horizontal;
+  state.player.x += horizontal * TUNING.runSpeed;
   state.player.y = currentFloorY();
 }
 
 function updateJumpMovement() {
-  state.player.x += state.player.jumpDirection;
+  const horizontal = currentHorizontalIntent();
+  if (state.player.jumpSteerFrames > 0) {
+    if (horizontal !== 0) {
+      state.player.jumpDirection = horizontal;
+      state.player.facing = horizontal;
+    }
+    state.player.jumpSteerFrames -= 1;
+  }
+
+  state.player.x += state.player.jumpDirection * TUNING.jumpSpeed;
   state.player.y -= JUMP_TABLE[state.player.jumpIndex];
   state.player.jumpIndex += 1;
 
@@ -718,6 +738,7 @@ function updateJumpMovement() {
 
   if (state.player.jumpIndex >= JUMP_TABLE.length) {
     state.player.jumpIndex = -1;
+    state.player.jumpSteerFrames = 0;
     state.player.mode = "ground";
     state.player.y = currentFloorY();
   }
@@ -737,8 +758,9 @@ function updateLadderMovement() {
   if (!state.player.underground && state.player.y <= WORLD.groundY + 1 && horizontal !== 0) {
     state.player.mode = "jump";
     state.player.y = WORLD.groundY - 1;
-    state.player.jumpIndex = 0;
+    state.player.jumpIndex = TUNING.ladderExitJumpIndex;
     state.player.jumpDirection = horizontal;
+    state.player.jumpSteerFrames = 0;
     state.player.facing = horizontal;
     setStatus("Jumped clear of the ladder");
     return;
@@ -869,14 +891,14 @@ function checkTerrainHazards() {
     if (isInHazardInterval(feetX)) {
       const moving = currentHorizontalIntent() !== 0;
       state.sinkMeter += moving ? TUNING.quicksandMovingRate : TUNING.quicksandStandingRate;
-      state.player.y = WORLD.groundY + Math.min(state.sinkMeter * 1.1, 14);
+      state.player.y = WORLD.groundY + Math.min(state.sinkMeter * 0.9, 12);
       if (state.sinkMeter >= TUNING.quicksandThreshold) {
         killHarry("Quicksand swallowed Harry.");
       }
       return;
     }
 
-    state.sinkMeter = Math.max(0, state.sinkMeter - 0.35);
+    state.sinkMeter = Math.max(0, state.sinkMeter - TUNING.quicksandReleaseRate);
     state.player.y = WORLD.groundY;
     return;
   }
