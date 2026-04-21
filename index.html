@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LottoMind | Pillfall Harry</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero__copy">
+        <p class="eyebrow">LottoMind Arcade / 2600 Remix</p>
+        <div class="brand-row">
+          <span class="brand-chip">LottoMind Signal Build</span>
+          <span class="brand-chip brand-chip--subtle">Cyber Jungle Edition</span>
+        </div>
+        <h1>Pillfall Harry</h1>
+        <p class="tagline">
+          A LottoMind-styled browser remix of Atari Pitfall logic, rebuilt with
+          your custom jungle cast, tuned collisions, neon hazards, and a more
+          forgiving adventure feel.
+        </p>
+      </div>
+      <div class="hero__feature">
+        <p class="hero__feature-label">LottoMind Scene Decode</p>
+        <div class="prescription-pill" id="hero-target-pill">
+          <span id="hero-target-label">Jungle Entry</span>
+        </div>
+        <p class="hero__feature-copy" id="hero-target-copy">
+          Scene rules are being pulled from the original assembly tables with a
+          branded LottoMind presentation layer.
+        </p>
+      </div>
+    </header>
+
+    <main class="game-layout">
+      <section class="stage-card">
+        <div class="hud">
+          <div class="hud__item">
+            <span class="hud__label">Score</span>
+            <strong class="hud__value" id="score">0</strong>
+          </div>
+          <div class="hud__item">
+            <span class="hud__label">Lives</span>
+            <strong class="hud__value" id="lives">3</strong>
+          </div>
+          <div class="hud__item">
+            <span class="hud__label">Time</span>
+            <strong class="hud__value" id="combo">20:00</strong>
+          </div>
+          <div class="hud__item">
+            <span class="hud__label">Scene</span>
+            <strong class="hud__value" id="level">001</strong>
+          </div>
+          <div class="hud__item hud__item--wide">
+            <span class="hud__label">Run Status</span>
+            <strong class="hud__value" id="status">Press Start to begin</strong>
+          </div>
+        </div>
+
+        <div class="canvas-shell">
+          <canvas id="game" width="720" height="920" aria-label="Pillfall Harry arcade game"></canvas>
+
+          <div class="overlay" id="start-overlay">
+            <div class="overlay__card">
+              <p class="overlay__eyebrow">How To Play</p>
+              <h2>Run the LottoMind jungle</h2>
+              <p>
+                Move Harry through assembly-driven scenes, jump hazards, use the
+                ladder when it's present, and release from the liana to clear
+                pits and crocs with a little more forgiveness in the timing.
+              </p>
+              <p>
+                Keyboard: <strong>Arrow keys</strong> or <strong>A / D</strong>,
+                <strong>Space</strong> to jump, <strong>E</strong> to use a
+                ladder or release a liana, and <strong>P</strong> to pause.
+              </p>
+              <button class="primary-button" id="start-button">Start Run</button>
+            </div>
+          </div>
+
+          <div class="overlay hidden" id="pause-overlay">
+            <div class="overlay__card overlay__card--compact">
+              <p class="overlay__eyebrow">Paused</p>
+              <h2>Hold the signal</h2>
+              <p>Press <strong>P</strong> or tap Resume when you're ready.</p>
+              <button class="primary-button" id="resume-button">Resume</button>
+            </div>
+          </div>
+
+          <div class="overlay hidden" id="game-over-overlay">
+            <div class="overlay__card">
+              <p class="overlay__eyebrow">LottoMind Run Over</p>
+              <h2 id="game-over-title">Harry needs another shot</h2>
+              <p id="game-over-copy">You made it through the jungle.</p>
+              <div class="overlay__stats">
+                <span>Final Score</span>
+                <strong id="final-score">0</strong>
+              </div>
+              <div class="overlay__stats">
+                <span>Best Score</span>
+                <strong id="best-score">0</strong>
+              </div>
+              <button class="primary-button" id="restart-button">Run Again</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-bar">
+          <button class="control-button" data-move="left" aria-label="Move left">Left</button>
+          <button class="control-button control-button--jump" id="jump-button" aria-label="Jump">Jump</button>
+          <button class="control-button" data-move="right" aria-label="Move right">Right</button>
+          <button class="control-button control-button--use" id="use-button" aria-label="Use ladder or release liana">Use</button>
+          <button class="control-button control-button--pause" id="pause-button" aria-label="Pause game">Pause</button>
+        </div>
+      </section>
+
+      <aside class="info-card">
+        <div class="info-card__block">
+          <p class="info-card__eyebrow">Scene Readout</p>
+          <h3 id="sidebar-target">Jungle Entry</h3>
+          <p id="sidebar-copy">The active scene is decoded from the original random table.</p>
+        </div>
+
+        <div class="info-card__block">
+          <p class="info-card__eyebrow">LottoMind Cast</p>
+          <img class="roster-preview" src="assets/custom-roster.png" alt="Custom Pillfall Harry character roster">
+        </div>
+
+        <div class="info-card__block">
+          <p class="info-card__eyebrow">Tuned Feel</p>
+          <ul class="tip-list">
+            <li>Hitboxes are tighter now, so jumps read cleaner against logs, fire, and snakes.</li>
+            <li>Ladder use has a wider grab range and treasure pickup is a little more generous.</li>
+            <li>Liana catch and quicksand escape windows have both been softened for better flow.</li>
+          </ul>
+        </div>
+
+        <div class="info-card__block">
+          <p class="info-card__eyebrow">LottoMind Feed</p>
+          <div class="feed" id="feed" aria-live="polite"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="pitfall-port.js"></script>
+</body>
+</html>
