@@ -43,26 +43,45 @@ const WORLD = {
   xMax: 148,
 };
 
+const FRAME_TIME = 1 / 60;
 const START_TIME = 20 * 60;
+const START_SCORE = 2000;
 const RAND_SEED = 0xc4;
 const HIGH_SCORE_KEY = "pillfall-harry-high-score";
 const BRAND_NAME = "LottoMind";
+
+// David Crane's original 32-frame jump curve from the Pitfall source.
+const JUMP_TABLE = [
+  1, 1, 1, 1, 1, 1, 1, 0,
+  1, 0, 0, 1, 0, 0, 0, 1,
+  -1, 0, 0, 0, -1, 0, 0, -1,
+  0, -1, -1, -1, -1, -1, -1, -1,
+];
+
+const CROC_HEADS = [60, 76, 92];
+const CROC_OPEN_BOUNDS = [[44, 61], [64, 77], [80, 93], [96, 107]];
+const QUICKSAND_WIDTHS = [12, 16, 20, 28, 20, 16];
+
 const TUNING = {
-  jumpVelocity: -126,
-  gravity: 220,
-  ladderRange: 12,
+  ladderGrabRange: 10,
+  ladderStepInterval: 8,
+  ladderStepAmount: 2,
   lianaCatchX: 13,
-  lianaCatchY: 18,
+  lianaCatchY: 20,
   pitInset: 2,
-  quicksandMovingRate: 0.32,
+  quicksandMovingRate: 0.28,
   quicksandStandingRate: 0.62,
-  quicksandThreshold: 1.55,
-  logClearance: 13,
-  fireClearance: 16,
-  cobraClearance: 18,
-  scorpionClearance: 14,
+  quicksandThreshold: 1.65,
+  logJumpClearance: 12,
+  fireJumpClearance: 15,
+  cobraJumpClearance: 17,
+  scorpionJumpClearance: 13,
   treasureMagnetX: 12,
   treasureMagnetY: 16,
+  deathFrames: 70,
+  holeDropSpeed: 1.2,
+  deathFallSpeed: 2.2,
+  crocCycleFrames: 64,
 };
 
 const sceneNames = [
@@ -79,15 +98,17 @@ const sceneNames = [
 const sceneHints = [
   "A ladder scene with one hole and an underground route.",
   "Three holes and a ladder. The tunnel can skip scenes fast.",
-  "The liana is your best line across the pit.",
+  "The vine is the cleanest path over the tar pit.",
   "Blue water pit with a swinging line overhead.",
-  "Four crocs animate their bite windows across the pool.",
+  "Three crocs make a stepping-stone bridge when their jaws cooperate.",
   "Treasure rests beside unstable sand.",
-  "Black quicksand widens and punishes slow movement.",
+  "Black quicksand widens and punishes standing still.",
   "Blue quicksand looks calmer than it is.",
 ];
 
 const lianaTable = [false, false, true, true, true, false, true, false];
+
+// These intervals come directly from the original scene tables.
 const holeBounds = {
   0: [[72, 79]],
   1: [[44, 55], [72, 79], [96, 107]],
@@ -115,12 +136,22 @@ const treasureBlueprints = [
 ];
 
 const spriteCrops = {
+  hero: {
+    path: "assets/lottomind-main-hero-clean.png",
+    x: 209,
+    y: 112,
+    width: 688,
+    height: 1233,
+    drawWidth: 50,
+    drawHeight: 88,
+    anchorX: 6,
+    anchorY: 22,
+  },
   roster: {
-    path: "assets/custom-roster.png",
-    hero: { x: 92, y: 102, width: 238, height: 318, drawWidth: 46, drawHeight: 62, anchorX: 11, anchorY: 30 },
-    croc: { x: 448, y: 146, width: 500, height: 254, drawWidth: 66, drawHeight: 36, anchorX: 14, anchorY: 15 },
-    snake: { x: 78, y: 570, width: 350, height: 338, drawWidth: 56, drawHeight: 64, anchorX: 12, anchorY: 25 },
-    scorpion: { x: 556, y: 632, width: 354, height: 214, drawWidth: 60, drawHeight: 36, anchorX: 12, anchorY: 11 },
+    path: "assets/custom-roster-lottomind-v2-clean.png",
+    croc: { x: 627, y: 207, width: 584, height: 321, drawWidth: 84, drawHeight: 48, anchorX: 12, anchorY: 8 },
+    snake: { x: 63, y: 644, width: 452, height: 454, drawWidth: 54, drawHeight: 56, anchorX: 7, anchorY: 14 },
+    scorpion: { x: 637, y: 674, width: 561, height: 424, drawWidth: 76, drawHeight: 54, anchorX: 10, anchorY: 13 },
   },
   reference: {
     path: "assets/reference-collage.webp",
@@ -131,10 +162,12 @@ const spriteCrops = {
 };
 
 const assets = {
+  hero: new Image(),
   roster: new Image(),
   reference: new Image(),
 };
 
+assets.hero.src = spriteCrops.hero.path;
 assets.roster.src = spriteCrops.roster.path;
 assets.reference.src = spriteCrops.reference.path;
 
@@ -142,7 +175,7 @@ const state = {
   running: false,
   paused: false,
   gameOver: false,
-  score: 0,
+  score: START_SCORE,
   lives: 3,
   timer: START_TIME,
   bestScore: readBestScore(),
@@ -153,31 +186,34 @@ const state = {
   sceneFeed: [],
   collectedTreasures: new Set(),
   lastTime: 0,
+  frameAccumulator: 0,
+  frameCount: 0,
   elapsed: 0,
-  animationTick: 0,
   sinkMeter: 0,
+  scorpionX: 80,
+  scorpionFacing: 1,
   pendingMessage: "",
-  scorpionX: 88,
-  scorpionDir: 1,
+  lastLogContact: false,
   input: {
     left: false,
     right: false,
-    jump: false,
-    use: false,
+    up: false,
+    down: false,
+    jumpQueued: false,
+    useQueued: false,
   },
   player: {
     x: 20,
     y: WORLD.groundY,
-    vx: 0,
-    vy: 0,
     facing: 1,
     underground: false,
     mode: "ground",
-    invulnerability: 0,
-    stumbleTimer: 0,
-    transitionProgress: 0,
-    transitionFromY: WORLD.groundY,
-    transitionToY: WORLD.groundY,
+    jumpIndex: -1,
+    jumpDirection: 0,
+    respawnUnderground: false,
+    invulnerabilityFrames: 0,
+    stumbleFrames: 0,
+    deathFrames: 0,
   },
 };
 
@@ -278,7 +314,7 @@ function buildScene(seed) {
   const objectLabel = treasure
     ? treasure.label
     : sceneType === 4
-      ? "Cyber Crocodiles"
+      ? "Crocodiles"
       : objectBlueprints[objectType].label;
 
   return {
@@ -324,7 +360,7 @@ function buildSceneObjects(scene) {
     y: WORLD.groundTop - 10,
     width: blueprint.kind === "cobra" ? 18 : 16,
     height: blueprint.kind === "fire" ? 20 : 12,
-    phase: index * 0.9,
+    phase: index * 6,
   }));
 }
 
@@ -335,13 +371,14 @@ function updateScenePanel() {
   heroTargetLabel.textContent = scene.name;
   heroTargetCopy.textContent = `${BRAND_NAME} decode: ${scene.hint} Object: ${scene.objectLabel}. Seed ${scene.seed.toString(16).padStart(2, "0").toUpperCase()}.`;
   sidebarTarget.textContent = scene.name;
-  sidebarCopy.textContent = `${scene.hint} Active object: ${scene.objectLabel}. ${BRAND_NAME} tuning is live.`;
+  sidebarCopy.textContent = `${scene.hint} Active object: ${scene.objectLabel}. Movement now follows the original Pitfall rules more closely.`;
 }
 
 function enterScene(announce = false) {
   state.scene = buildScene(state.sceneSeed);
   state.sceneObjects = buildSceneObjects(state.scene);
   state.sinkMeter = 0;
+  state.scorpionX = state.scene.xPosScorpion;
   updateScenePanel();
   syncHud();
 
@@ -350,11 +387,25 @@ function enterScene(announce = false) {
   }
 }
 
+function resetPlayerForRun() {
+  state.player.x = 20;
+  state.player.y = WORLD.groundY;
+  state.player.facing = 1;
+  state.player.underground = false;
+  state.player.mode = "ground";
+  state.player.jumpIndex = -1;
+  state.player.jumpDirection = 0;
+  state.player.respawnUnderground = false;
+  state.player.invulnerabilityFrames = 0;
+  state.player.stumbleFrames = 0;
+  state.player.deathFrames = 0;
+}
+
 function resetRun() {
   state.running = false;
   state.paused = false;
   state.gameOver = false;
-  state.score = 0;
+  state.score = START_SCORE;
   state.lives = 3;
   state.timer = START_TIME;
   state.sceneSeed = RAND_SEED;
@@ -362,25 +413,16 @@ function resetRun() {
   state.collectedTreasures.clear();
   state.sceneFeed = [];
   state.lastTime = 0;
+  state.frameAccumulator = 0;
+  state.frameCount = 0;
   state.elapsed = 0;
-  state.animationTick = 0;
-  state.scorpionX = 88;
-  state.scorpionDir = 1;
-  state.player.x = 20;
-  state.player.y = WORLD.groundY;
-  state.player.vx = 0;
-  state.player.vy = 0;
-  state.player.facing = 1;
-  state.player.underground = false;
-  state.player.mode = "ground";
-  state.player.invulnerability = 0;
-  state.player.stumbleTimer = 0;
-  state.player.transitionProgress = 0;
-  state.input.jump = false;
-  state.input.use = false;
+  state.sinkMeter = 0;
+  state.pendingMessage = "";
+  state.lastLogContact = false;
+  resetPlayerForRun();
   enterScene(false);
   setStatus("Press Start to begin");
-  addFeed("Run Ready", `${BRAND_NAME} tables loaded. Harry is waiting at the jungle edge.`);
+  addFeed("Run Ready", `${BRAND_NAME} loaded the original 20-minute jungle run. Score starts at 2000 like the Atari game.`);
 }
 
 function startGame() {
@@ -391,7 +433,7 @@ function startGame() {
   pauseOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
   setStatus("Run live");
-  addFeed("Run Live", `Use jump for hazards and use for ladders or liana release. ${BRAND_NAME} tuning is active.`);
+  addFeed("Run Live", "Jump locks your direction, holes drop you underground, and crocodiles now work like stepping stones.");
   requestAnimationFrame(loop);
 }
 
@@ -427,81 +469,158 @@ function endGame(reason, win = false) {
   gameOverOverlay.classList.remove("hidden");
 }
 
-function startJump(speedBoost = 0) {
-  if (state.player.mode !== "ground" || state.player.underground) {
+function changeScore(amount) {
+  state.score = Math.max(0, state.score + amount);
+}
+
+function currentHorizontalIntent() {
+  return (state.input.right ? 1 : 0) - (state.input.left ? 1 : 0);
+}
+
+function consumeQueuedInput(key) {
+  if (!state.input[key]) {
+    return false;
+  }
+  state.input[key] = false;
+  return true;
+}
+
+function currentHazardBounds() {
+  if (state.scene.sceneType === 4) {
+    const crocClosed = Math.floor(state.frameCount / TUNING.crocCycleFrames) % 2 === 0;
+    return crocClosed ? holeBounds[4] : CROC_OPEN_BOUNDS;
+  }
+
+  if (state.scene.sceneType === 5 || state.scene.sceneType === 6 || state.scene.sceneType === 7) {
+    const quickWidth = QUICKSAND_WIDTHS[Math.floor(state.frameCount / 8) % QUICKSAND_WIDTHS.length];
+    return [[80 - quickWidth, 80 + quickWidth]];
+  }
+
+  return holeBounds[state.scene.sceneType] ?? [];
+}
+
+function isWithinBound(x, bound) {
+  return x >= bound[0] && x <= bound[1];
+}
+
+function isInHazardInterval(x) {
+  return currentHazardBounds().some((bound) => isWithinBound(x, bound));
+}
+
+function isNearLadder() {
+  return state.scene.ladder && Math.abs(state.player.x - WORLD.ladderX) <= TUNING.ladderGrabRange;
+}
+
+function getLianaPosition() {
+  const angle = state.elapsed * 2.15;
+  return {
+    x: 80 + Math.sin(angle) * 28,
+    y: 34 + Math.cos(angle) * 6,
+    direction: Math.cos(angle) >= 0 ? 1 : -1,
+  };
+}
+
+function isOnCrocHead(x) {
+  if (state.scene.sceneType !== 4) {
+    return false;
+  }
+
+  const inSwamp = x >= 44 && x <= 107;
+  return inSwamp && !isInHazardInterval(x);
+}
+
+function currentFloorY() {
+  if (state.player.underground) {
+    return WORLD.tunnelY;
+  }
+
+  if (isOnCrocHead(state.player.x)) {
+    return WORLD.groundY - 4;
+  }
+
+  return WORLD.groundY;
+}
+
+function startJump(direction, startIndex = 0) {
+  if (state.player.mode !== "ground" || state.player.stumbleFrames > 0) {
     return;
   }
 
   state.player.mode = "jump";
-  state.player.vy = TUNING.jumpVelocity;
-  state.player.vx = speedBoost;
+  state.player.jumpIndex = startIndex;
+  state.player.jumpDirection = direction === 0 ? state.player.facing : direction;
+  state.player.facing = state.player.jumpDirection;
 }
 
-function beginLadderTransition(targetUnderground) {
-  state.player.mode = "ladder";
-  state.player.transitionProgress = 0;
-  state.player.transitionFromY = state.player.y;
-  state.player.transitionToY = targetUnderground ? WORLD.tunnelY : WORLD.groundY;
-  state.player.underground = targetUnderground;
-  state.player.x = WORLD.ladderX;
-  setStatus(targetUnderground ? "Dropping underground" : "Climbing back up");
+function startSwingRelease() {
+  const liana = getLianaPosition();
+  state.player.mode = "jump";
+  state.player.jumpIndex = 16;
+  state.player.jumpDirection = liana.direction;
+  setStatus("Dropped from the vine");
 }
 
-function beginFall(reason) {
-  if (state.player.mode === "fall" || state.player.mode === "dead") {
+function startHoleDrop() {
+  if (state.player.mode === "fall") {
     return;
   }
 
   state.player.mode = "fall";
-  state.player.vx = 0;
-  state.player.vy = 42;
-  state.pendingMessage = reason;
-  setStatus(reason);
+  state.pendingMessage = "Dropped through a hole into the tunnel. -100.";
+  changeScore(-100);
+  state.player.jumpIndex = -1;
+  state.sinkMeter = 0;
+  setStatus("Falling underground");
+  addFeed("Hole Drop", "Harry missed the hole jump and dropped to the tunnel for a 100-point penalty.");
 }
 
-function loseLife(reason) {
+function killHarry(reason) {
   if (state.player.mode === "dead") {
     return;
   }
 
   state.player.mode = "dead";
-  state.player.vx = 0;
-  state.player.vy = -32;
-  state.player.stumbleTimer = 1.15;
+  state.player.deathFrames = TUNING.deathFrames;
+  state.player.respawnUnderground = state.player.underground;
+  state.pendingMessage = reason;
   state.lives -= 1;
   syncHud();
   setStatus(reason);
   addFeed("Life Lost", reason);
 
   if (state.lives <= 0) {
-    endGame(`The jungle won this ${BRAND_NAME} run. The scene tables are ready for another try.`);
+    endGame("The jungle won the run. Harry is out of lives.");
   }
 }
 
-function applyLogHit() {
-  if (state.player.invulnerability > 0 || state.player.mode === "dead") {
+function respawnHarry() {
+  if (state.lives <= 0) {
     return;
   }
 
-  state.player.invulnerability = 0.8;
-  state.player.stumbleTimer = 0.35;
-  state.player.x = Math.max(0, Math.min(WORLD.width, state.player.x + (state.player.facing >= 0 ? -5 : 5)));
-  state.score = Math.max(0, state.score - 100);
-  syncHud();
-  setStatus("Log collision. -100.");
-  addFeed("Stumble", "Rolling logs clipped Harry and shaved 100 points.");
+  state.player.x = 20;
+  state.player.underground = state.player.respawnUnderground;
+  state.player.y = state.player.underground ? WORLD.tunnelY : WORLD.groundY;
+  state.player.mode = "ground";
+  state.player.jumpIndex = -1;
+  state.player.jumpDirection = 0;
+  state.player.invulnerabilityFrames = 75;
+  state.player.stumbleFrames = 0;
+  state.player.deathFrames = 0;
+  state.sinkMeter = 0;
+  state.scorpionX = state.scene.xPosScorpion;
+  setStatus(state.player.underground ? "Replacement Harry returned to the tunnel." : "Replacement Harry dropped in from the trees.");
 }
 
 function collectTreasure(object) {
   state.collectedTreasures.add(state.scene.treasureKey);
-  state.score += object.points;
-  syncHud();
+  changeScore(object.points);
   state.sceneObjects = [];
   setStatus(`${object.label} collected for ${object.points}`);
   addFeed("Treasure", `Collected ${object.label} for ${object.points} points.`);
 
   if (state.collectedTreasures.size >= 32) {
-    endGame("All 32 treasure states have been cleared. Pillfall Harry wins the jungle.", true);
+    endGame("All 32 treasure states were cleared. Harry completed the jungle.", true);
   }
 }
 
@@ -515,34 +634,12 @@ function advanceScene(direction) {
   }
 
   state.player.x = direction < 0 ? WORLD.xMax : WORLD.xMin;
-  state.player.y = state.player.underground ? WORLD.tunnelY : WORLD.groundY;
-  state.player.vx = 0;
-  state.player.vy = 0;
+  state.player.y = state.player.underground ? WORLD.tunnelY : currentFloorY();
   state.player.mode = "ground";
+  state.player.jumpIndex = -1;
+  state.player.jumpDirection = 0;
+  state.sinkMeter = 0;
   enterScene(true);
-}
-
-function consumeAction(key) {
-  if (!state.input[key]) {
-    return false;
-  }
-
-  state.input[key] = false;
-  return true;
-}
-
-function currentHazardBounds() {
-  if (state.scene.sceneType === 4) {
-    const open = Math.sin(state.elapsed * 3.2) > 0;
-    return open ? [[44, 61], [64, 77], [80, 93], [96, 107]] : holeBounds[4];
-  }
-
-  if (state.scene.sceneType === 5 || state.scene.sceneType === 6 || state.scene.sceneType === 7) {
-    const quickWidth = 12 + Math.floor((Math.sin(state.elapsed * 2.2) + 1) * 12);
-    return [[80 - quickWidth, 80 + quickWidth]];
-  }
-
-  return holeBounds[state.scene.sceneType] ?? [];
 }
 
 function playerRect() {
@@ -558,131 +655,169 @@ function intersects(a, b) {
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
-function sceneSupportsLadderUse() {
-  return state.scene.ladder && Math.abs(state.player.x - WORLD.ladderX) < TUNING.ladderRange && state.player.mode === "ground";
-}
+function handleInputActions() {
+  const horizontal = currentHorizontalIntent();
 
-function handleActions() {
-  if (consumeAction("jump")) {
+  if (consumeQueuedInput("jumpQueued")) {
     if (state.player.mode === "swing") {
-      state.player.mode = "jump";
-      state.player.vx = Math.cos(state.elapsed * 2.2 + Math.PI / 2) * 54;
-      state.player.vy = -34;
-      setStatus("Released from liana");
-    } else {
-      startJump((state.input.right ? 16 : 0) - (state.input.left ? 16 : 0));
+      startSwingRelease();
+    } else if (state.player.mode === "ground") {
+      startJump(horizontal === 0 ? state.player.facing : horizontal);
     }
   }
 
-  if (consumeAction("use")) {
-    if (state.player.mode === "swing") {
-      state.player.mode = "jump";
-      state.player.vx = Math.cos(state.elapsed * 2.2 + Math.PI / 2) * 54;
-      state.player.vy = -28;
-      setStatus("Dropped from liana");
+  const wantsUse = consumeQueuedInput("useQueued");
+
+  if (state.player.mode === "swing" && (state.input.down || wantsUse)) {
+    startSwingRelease();
+  }
+
+  if (state.player.mode === "ground" && isNearLadder()) {
+    if (!state.player.underground && (state.input.down || wantsUse)) {
+      state.player.mode = "ladder";
+      state.player.x = WORLD.ladderX;
+      setStatus("Climbing down");
+    } else if (state.player.underground && state.input.up) {
+      state.player.mode = "ladder";
+      state.player.x = WORLD.ladderX;
+      setStatus("Climbing up");
+    }
+  }
+}
+
+function updateGroundMovement() {
+  if (state.player.stumbleFrames > 0) {
+    state.player.y = currentFloorY();
+    return;
+  }
+
+  const horizontal = currentHorizontalIntent();
+
+  if (horizontal !== 0) {
+    state.player.facing = horizontal;
+  }
+
+  state.player.x += horizontal;
+  state.player.y = currentFloorY();
+}
+
+function updateJumpMovement() {
+  state.player.x += state.player.jumpDirection;
+  state.player.y -= JUMP_TABLE[state.player.jumpIndex];
+  state.player.jumpIndex += 1;
+
+  if (state.scene.hasLiana && !state.player.underground) {
+    const liana = getLianaPosition();
+    if (Math.abs(state.player.x - liana.x) <= TUNING.lianaCatchX && Math.abs((state.player.y - 24) - liana.y) <= TUNING.lianaCatchY) {
+      state.player.mode = "swing";
+      state.player.jumpIndex = -1;
+      setStatus("Liana grabbed");
       return;
     }
+  }
 
-    if (sceneSupportsLadderUse()) {
-      beginLadderTransition(!state.player.underground);
-    }
+  if (state.player.jumpIndex >= JUMP_TABLE.length) {
+    state.player.jumpIndex = -1;
+    state.player.mode = "ground";
+    state.player.y = currentFloorY();
   }
 }
 
-function updatePlayer(delta) {
-  handleActions();
+function updateSwingMovement() {
+  const liana = getLianaPosition();
+  state.player.x = liana.x;
+  state.player.y = liana.y + 26;
+  state.player.facing = liana.direction;
+}
 
-  if (state.player.invulnerability > 0) {
-    state.player.invulnerability = Math.max(0, state.player.invulnerability - delta);
+function updateLadderMovement() {
+  state.player.x = WORLD.ladderX;
+
+  const horizontal = currentHorizontalIntent();
+  if (!state.player.underground && state.player.y <= WORLD.groundY + 1 && horizontal !== 0) {
+    state.player.mode = "jump";
+    state.player.y = WORLD.groundY - 1;
+    state.player.jumpIndex = 0;
+    state.player.jumpDirection = horizontal;
+    state.player.facing = horizontal;
+    setStatus("Jumped clear of the ladder");
+    return;
+  }
+
+  if (state.frameCount % TUNING.ladderStepInterval !== 0) {
+    return;
+  }
+
+  const wantsDown = state.input.down;
+  const wantsUp = state.input.up;
+
+  if (wantsUp) {
+    state.player.y -= TUNING.ladderStepAmount;
+  } else if (wantsDown) {
+    state.player.y += TUNING.ladderStepAmount;
+  }
+
+  if (state.player.y <= WORLD.groundY) {
+    state.player.y = WORLD.groundY;
+    state.player.underground = false;
+    state.player.mode = "ground";
+    setStatus("Back on the jungle floor");
+  } else if (state.player.y >= WORLD.tunnelY) {
+    state.player.y = WORLD.tunnelY;
+    state.player.underground = true;
+    state.player.mode = "ground";
+    setStatus("Tunnel route active");
+  }
+}
+
+function updateFallMovement() {
+  state.player.y += TUNING.holeDropSpeed;
+  if (state.player.y >= WORLD.tunnelY) {
+    state.player.y = WORLD.tunnelY;
+    state.player.underground = true;
+    state.player.mode = "ground";
+    state.sinkMeter = 0;
+    setStatus("Harry landed in the tunnel");
+  }
+}
+
+function updateDeathMovement() {
+  state.player.deathFrames -= 1;
+  state.player.y += Math.sin(state.player.deathFrames / 10) > 0 ? -0.3 : 0.9;
+  if (state.player.deathFrames <= 0 && state.lives > 0) {
+    respawnHarry();
+  }
+}
+
+function updatePlayerTick() {
+  handleInputActions();
+
+  if (state.player.invulnerabilityFrames > 0) {
+    state.player.invulnerabilityFrames -= 1;
+  }
+
+  if (state.player.stumbleFrames > 0) {
+    state.player.stumbleFrames -= 1;
   }
 
   if (state.player.mode === "dead") {
-    state.player.stumbleTimer -= delta;
-    state.player.y += state.player.vy * delta;
-    state.player.vy += 180 * delta;
-
-    if (state.player.stumbleTimer <= 0 && state.lives > 0) {
-      state.player.x = 20;
-      state.player.y = WORLD.groundY;
-      state.player.vx = 0;
-      state.player.vy = 0;
-      state.player.underground = false;
-      state.player.mode = "ground";
-      state.player.invulnerability = 1.2;
-      state.sceneSeed = RAND_SEED;
-      state.sceneIndex = 1;
-      enterScene(true);
-    }
-
+    updateDeathMovement();
     return;
-  }
-
-  if (state.player.mode === "ladder") {
-    state.player.transitionProgress += delta / 0.65;
-    const progress = Math.min(state.player.transitionProgress, 1);
-    state.player.x = WORLD.ladderX;
-    state.player.y = state.player.transitionFromY + ((state.player.transitionToY - state.player.transitionFromY) * progress);
-    if (progress >= 1) {
-      state.player.mode = "ground";
-      setStatus(state.player.underground ? `${BRAND_NAME} tunnel route active` : "Back on the jungle floor");
-    }
-    return;
-  }
-
-  if (state.player.mode === "swing") {
-    const bobX = 80 + Math.sin(state.elapsed * 2.2) * 28;
-    const bobY = 34 + Math.cos(state.elapsed * 2.2) * 6;
-    state.player.x = bobX;
-    state.player.y = bobY + 28;
-    state.player.vx = 0;
-    return;
-  }
-
-  const move = (state.input.right ? 1 : 0) - (state.input.left ? 1 : 0);
-  const speed = state.player.underground ? 46 : 54;
-  state.player.vx = move * speed;
-
-  if (move !== 0) {
-    state.player.facing = move;
-  }
-
-  if (state.player.mode === "ground") {
-    state.player.x += move * speed * delta;
-  }
-
-  if (state.player.mode === "jump") {
-    state.player.x += state.player.vx * delta;
-    state.player.y += state.player.vy * delta;
-    state.player.vy += TUNING.gravity * delta;
-
-    if (state.scene.hasLiana && !state.player.underground) {
-      const bobX = 80 + Math.sin(state.elapsed * 2.2) * 28;
-      const bobY = 34 + Math.cos(state.elapsed * 2.2) * 6;
-      if (Math.abs(state.player.x - bobX) < TUNING.lianaCatchX && Math.abs((state.player.y - 24) - bobY) < TUNING.lianaCatchY) {
-        state.player.mode = "swing";
-        setStatus(`${BRAND_NAME} liana locked`);
-      }
-    }
-
-    const floorY = state.player.underground ? WORLD.tunnelY : WORLD.groundY;
-    if (state.player.y >= floorY) {
-      state.player.y = floorY;
-      state.player.vy = 0;
-      state.player.mode = "ground";
-    }
   }
 
   if (state.player.mode === "fall") {
-    state.player.y += state.player.vy * delta;
-    state.player.vy += 210 * delta;
-    if (state.player.y > WORLD.height + 28) {
-      loseLife(state.pendingMessage || "Harry fell out of the scene.");
-    }
+    updateFallMovement();
+  } else if (state.player.mode === "ladder") {
+    updateLadderMovement();
+  } else if (state.player.mode === "swing") {
+    updateSwingMovement();
+  } else if (state.player.mode === "jump") {
+    updateJumpMovement();
+  } else {
+    updateGroundMovement();
   }
 
-  if (state.player.stumbleTimer > 0) {
-    state.player.stumbleTimer = Math.max(0, state.player.stumbleTimer - delta);
-  }
+  state.player.x = Math.max(0, Math.min(WORLD.width, state.player.x));
 
   if (state.player.underground && state.scene.ladder) {
     const wallX = state.scene.wallSide === "left" ? 18 : 142;
@@ -693,60 +828,82 @@ function updatePlayer(delta) {
       state.player.x = wallX - 8;
     }
   }
-
-  state.player.x = Math.max(0, Math.min(WORLD.width, state.player.x));
 }
 
-function updateObjects(delta) {
+function updateObjectsTick() {
   state.sceneObjects.forEach((object) => {
-    if (object.kind === "log" && object.moving) {
-      object.x -= 26 * delta;
+    if (object.kind === "log" && object.moving && state.frameCount % 2 === 0) {
+      object.x -= 1;
       if (object.x < -18) {
         object.x = 178;
       }
     }
   });
 
-  if (!state.scene.ladder) {
-    state.scorpionX += state.scorpionDir * 18 * delta;
-    if (state.scorpionX < 34 || state.scorpionX > 126) {
-      state.scorpionDir *= -1;
+  if (!state.scene.ladder && state.frameCount % 8 === 0) {
+    if (state.player.x > state.scorpionX) {
+      state.scorpionX += 1;
+      state.scorpionFacing = 1;
+    } else if (state.player.x < state.scorpionX) {
+      state.scorpionX -= 1;
+      state.scorpionFacing = -1;
     }
   }
 }
 
-function checkTerrainHazards(delta) {
+function checkTerrainHazards() {
   if (state.player.underground || state.player.mode !== "ground") {
     return;
   }
 
   const feetX = state.player.x;
 
-  for (const bound of currentHazardBounds()) {
-    if (feetX >= bound[0] + TUNING.pitInset && feetX <= bound[1] - TUNING.pitInset) {
-      if (state.scene.sceneType >= 5) {
-        state.sinkMeter += delta * (Math.abs(state.player.vx) > 0 ? TUNING.quicksandMovingRate : TUNING.quicksandStandingRate);
-        state.player.y = WORLD.groundY + Math.min(state.sinkMeter * 10, 16);
-        if (state.sinkMeter > TUNING.quicksandThreshold) {
-          loseLife("Quicksand swallowed Harry.");
-        }
-      } else {
-        beginFall(state.scene.sceneType === 4 ? "The crocs snapped the landing." : "Harry dropped through the terrain.");
+  if (state.scene.sceneType === 4) {
+    if (feetX >= 44 && feetX <= 107 && !isOnCrocHead(feetX)) {
+      killHarry("The crocs snapped the landing.");
+    }
+    return;
+  }
+
+  if (state.scene.sceneType === 5 || state.scene.sceneType === 6 || state.scene.sceneType === 7) {
+    if (isInHazardInterval(feetX)) {
+      const moving = currentHorizontalIntent() !== 0;
+      state.sinkMeter += moving ? TUNING.quicksandMovingRate : TUNING.quicksandStandingRate;
+      state.player.y = WORLD.groundY + Math.min(state.sinkMeter * 1.1, 14);
+      if (state.sinkMeter >= TUNING.quicksandThreshold) {
+        killHarry("Quicksand swallowed Harry.");
       }
       return;
     }
+
+    state.sinkMeter = Math.max(0, state.sinkMeter - 0.35);
+    state.player.y = WORLD.groundY;
+    return;
   }
 
-  state.sinkMeter = Math.max(0, state.sinkMeter - delta * 2.4);
-  state.player.y = WORLD.groundY;
+  if (currentHazardBounds().some((bound) => feetX >= bound[0] + TUNING.pitInset && feetX <= bound[1] - TUNING.pitInset)) {
+    if (state.scene.ladder) {
+      startHoleDrop();
+    } else {
+      killHarry(state.scene.sceneType === 2 || state.scene.sceneType === 3 ? "Harry fell into the pit." : "Harry missed the hazard.");
+    }
+  }
+}
+
+function logContactPenalty() {
+  changeScore(-1);
+  state.player.stumbleFrames = 5;
+  setStatus("Log contact. Score ticking down.");
 }
 
 function checkObjectCollisions() {
   if (state.player.mode === "dead" || state.player.mode === "fall" || state.player.mode === "ladder" || state.player.mode === "swing") {
+    state.lastLogContact = false;
     return;
   }
 
   const rect = playerRect();
+  let touchingLog = false;
 
   for (const object of state.sceneObjects) {
     let bounds = {
@@ -798,33 +955,40 @@ function checkObjectCollisions() {
 
     if (object.kind === "treasure") {
       collectTreasure(object);
-      return;
+      break;
     }
 
     if (object.kind === "log") {
-      if (state.player.mode === "jump" && state.player.y < WORLD.groundY - TUNING.logClearance) {
+      if (state.player.mode === "jump" && state.player.y < currentFloorY() - TUNING.logJumpClearance) {
         continue;
       }
-      applyLogHit();
-      return;
+      touchingLog = true;
+      state.player.x += object.moving ? -1 : 0;
+      continue;
     }
 
     if (object.kind === "fire") {
-      if (state.player.mode === "jump" && state.player.y < WORLD.groundY - TUNING.fireClearance) {
+      if (state.player.mode === "jump" && state.player.y < currentFloorY() - TUNING.fireJumpClearance) {
         continue;
       }
-      loseLife("The fire line burned the run.");
+      killHarry("The fire line burned the run.");
       return;
     }
 
     if (object.kind === "cobra") {
-      if (state.player.mode === "jump" && state.player.y < WORLD.groundY - TUNING.cobraClearance) {
+      if (state.player.mode === "jump" && state.player.y < currentFloorY() - TUNING.cobraJumpClearance) {
         continue;
       }
-      loseLife("The cobra landed the hit.");
+      killHarry("The cobra landed the hit.");
       return;
     }
   }
+
+  if (touchingLog) {
+    logContactPenalty();
+  }
+
+  state.lastLogContact = touchingLog;
 }
 
 function checkScorpionCollision() {
@@ -844,15 +1008,15 @@ function checkScorpionCollision() {
     return;
   }
 
-  if (state.player.mode === "jump" && state.player.y < WORLD.tunnelY - TUNING.scorpionClearance) {
+  if (state.player.mode === "jump" && state.player.y < WORLD.tunnelY - TUNING.scorpionJumpClearance) {
     return;
   }
 
-  loseLife("The tunnel scorpion cut the route.");
+  killHarry("The tunnel scorpion cut the route.");
 }
 
 function updateSceneProgression() {
-  if (state.player.mode === "ladder" || state.player.mode === "dead") {
+  if (state.player.mode === "ladder" || state.player.mode === "dead" || state.player.mode === "fall") {
     return;
   }
 
@@ -871,19 +1035,19 @@ function updateSceneProgression() {
   }
 }
 
-function update(delta) {
-  state.elapsed += delta;
-  state.animationTick += delta;
+function updateTick() {
+  state.frameCount += 1;
+  state.elapsed += FRAME_TIME;
+  state.timer = Math.max(0, state.timer - FRAME_TIME);
 
-  state.timer = Math.max(0, state.timer - delta);
   if (state.timer <= 0) {
     endGame("Time expired before the jungle was cleared.");
     return;
   }
 
-  updatePlayer(delta);
-  updateObjects(delta);
-  checkTerrainHazards(delta);
+  updatePlayerTick();
+  updateObjectsTick();
+  checkTerrainHazards();
   checkObjectCollisions();
   checkScorpionCollision();
   updateSceneProgression();
@@ -947,17 +1111,16 @@ function drawLiana() {
     return;
   }
 
-  const bobX = 80 + Math.sin(state.elapsed * 2.2) * 28;
-  const bobY = 34 + Math.cos(state.elapsed * 2.2) * 6;
+  const liana = getLianaPosition();
   ctx.strokeStyle = "#b9985b";
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(worldX(80), worldY(8));
-  ctx.lineTo(worldX(bobX), worldY(bobY));
+  ctx.lineTo(worldX(liana.x), worldY(liana.y));
   ctx.stroke();
   ctx.fillStyle = "#d9b770";
   ctx.beginPath();
-  ctx.arc(worldX(bobX), worldY(bobY), 6, 0, Math.PI * 2);
+  ctx.arc(worldX(liana.x), worldY(liana.y), 6, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -1002,10 +1165,10 @@ function drawCrop(sheet, crop, dx, dy, dw, dh, flip = false) {
 }
 
 function drawHero() {
-  const heroSprite = spriteCrops.roster.hero;
+  const heroSprite = spriteCrops.hero;
   const drawX = worldX(state.player.x - heroSprite.anchorX);
-  const drawY = worldY(state.player.y - heroSprite.anchorY + (state.player.stumbleTimer > 0 ? 2 : 0));
-  const flicker = state.player.invulnerability > 0 && Math.floor(state.elapsed * 16) % 2 === 0;
+  const drawY = worldY(state.player.y - heroSprite.anchorY + (state.player.stumbleFrames > 0 ? 2 : 0));
+  const flicker = state.player.invulnerabilityFrames > 0 && state.frameCount % 4 < 2;
   if (flicker) {
     return;
   }
@@ -1016,7 +1179,7 @@ function drawHero() {
   ctx.fill();
 
   const drawn = drawCrop(
-    assets.roster,
+    assets.hero,
     heroSprite,
     drawX,
     drawY,
@@ -1024,6 +1187,7 @@ function drawHero() {
     heroSprite.drawHeight,
     state.player.facing < 0,
   );
+
   if (!drawn) {
     ctx.fillStyle = "#d7b07b";
     ctx.fillRect(drawX + 8, drawY + 4, 24, 34);
@@ -1080,7 +1244,7 @@ function drawCobra(object) {
     assets.roster,
     sprite,
     worldX(object.x - sprite.anchorX),
-    worldY(object.y - sprite.anchorY),
+    worldY(object.y - sprite.anchorY + 1),
     sprite.drawWidth,
     sprite.drawHeight,
     false,
@@ -1097,12 +1261,12 @@ function drawCrocs() {
   }
 
   const sprite = spriteCrops.roster.croc;
-  [48, 68, 84, 100].forEach((x) => {
+  CROC_HEADS.forEach((x) => {
     drawCrop(
       assets.roster,
       sprite,
       worldX(x - sprite.anchorX),
-      worldY(WORLD.groundTop - sprite.anchorY),
+      worldY(WORLD.groundTop - sprite.anchorY + 1),
       sprite.drawWidth,
       sprite.drawHeight,
       false,
@@ -1120,10 +1284,10 @@ function drawScorpion() {
     assets.roster,
     sprite,
     worldX(state.scorpionX - sprite.anchorX),
-    worldY(WORLD.tunnelTop + 6 - sprite.anchorY + 10),
+    worldY(WORLD.tunnelTop + 8 - sprite.anchorY),
     sprite.drawWidth,
     sprite.drawHeight,
-    state.scorpionDir < 0,
+    state.scorpionFacing < 0,
   );
 }
 
@@ -1143,9 +1307,9 @@ function drawObjects() {
 
 function drawSceneInfo() {
   ctx.fillStyle = "rgba(17, 208, 188, 0.18)";
-  ctx.fillRect(38, 18, 366, 64);
+  ctx.fillRect(38, 18, 390, 64);
   ctx.strokeStyle = "rgba(17, 208, 188, 0.26)";
-  ctx.strokeRect(38.5, 18.5, 365, 63);
+  ctx.strokeRect(38.5, 18.5, 389, 63);
   ctx.fillStyle = "rgba(140, 248, 240, 0.92)";
   ctx.font = "700 14px 'Trebuchet MS'";
   ctx.fillText(`${BRAND_NAME.toUpperCase()} ARCADE`, 58, 36);
@@ -1176,10 +1340,15 @@ function loop(timestamp) {
     return;
   }
 
-  const delta = Math.min((timestamp - state.lastTime) / 1000, 0.033);
+  const delta = Math.min((timestamp - state.lastTime) / 1000, 0.1);
   state.lastTime = timestamp;
+  state.frameAccumulator += delta;
 
-  update(delta);
+  while (state.frameAccumulator >= FRAME_TIME && state.running && !state.gameOver) {
+    state.frameAccumulator -= FRAME_TIME;
+    updateTick();
+  }
+
   drawScene();
 
   if (state.running && !state.paused && !state.gameOver) {
@@ -1217,14 +1386,25 @@ window.addEventListener("keydown", (event) => {
     setMoveInput("right", true);
   }
 
-  if (event.code === "Space" && !event.repeat) {
+  if (event.code === "ArrowUp" || event.code === "KeyW") {
     event.preventDefault();
-    state.input.jump = true;
+    setMoveInput("up", true);
   }
 
-  if ((event.code === "KeyE" || event.code === "ArrowUp" || event.code === "ArrowDown") && !event.repeat) {
+  if (event.code === "ArrowDown" || event.code === "KeyS") {
     event.preventDefault();
-    state.input.use = true;
+    setMoveInput("down", true);
+    state.input.useQueued = true;
+  }
+
+  if (event.code === "Space" && !event.repeat) {
+    event.preventDefault();
+    state.input.jumpQueued = true;
+  }
+
+  if (event.code === "KeyE" && !event.repeat) {
+    event.preventDefault();
+    state.input.useQueued = true;
   }
 });
 
@@ -1236,6 +1416,14 @@ window.addEventListener("keyup", (event) => {
   if (event.code === "ArrowRight" || event.code === "KeyD") {
     setMoveInput("right", false);
   }
+
+  if (event.code === "ArrowUp" || event.code === "KeyW") {
+    setMoveInput("up", false);
+  }
+
+  if (event.code === "ArrowDown" || event.code === "KeyS") {
+    setMoveInput("down", false);
+  }
 });
 
 startButton.addEventListener("click", startGame);
@@ -1243,10 +1431,10 @@ resumeButton.addEventListener("click", () => togglePause(false));
 restartButton.addEventListener("click", startGame);
 pauseButton.addEventListener("click", () => togglePause());
 jumpButton.addEventListener("click", () => {
-  state.input.jump = true;
+  state.input.jumpQueued = true;
 });
 useButton.addEventListener("click", () => {
-  state.input.use = true;
+  state.input.useQueued = true;
 });
 
 document.querySelectorAll("[data-move]").forEach((button) => {
@@ -1260,8 +1448,11 @@ document.querySelectorAll("[data-move]").forEach((button) => {
 window.addEventListener("blur", () => {
   state.input.left = false;
   state.input.right = false;
+  state.input.up = false;
+  state.input.down = false;
 });
 
+assets.hero.addEventListener("load", () => drawScene());
 assets.roster.addEventListener("load", () => drawScene());
 assets.reference.addEventListener("load", () => drawScene());
 
