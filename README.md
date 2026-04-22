@@ -1,6 +1,6 @@
-# The Lotto Jungle
+# Lotto Minded
 
-`Pillfall Harry` is a LottoMind-branded browser jungle runner inspired by the Atari `Pitfall!` source you shared, rebuilt with a custom cyber-jungle cast and tuned platforming feel.
+`Lotto Minded` is a LottoMind-branded browser jungle runner inspired by the Atari `Pitfall!` source you shared, rebuilt with a custom cyber-jungle cast and tuned platforming feel.
 
 ## How to run
 

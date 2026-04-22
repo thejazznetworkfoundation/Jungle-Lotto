@@ -47,8 +47,11 @@ const FRAME_TIME = 1 / 60;
 const START_TIME = 20 * 60;
 const START_SCORE = 2000;
 const RAND_SEED = 0xc4;
-const HIGH_SCORE_KEY = "pillfall-harry-high-score";
+const HIGH_SCORE_KEY = "lottominded-high-score";
 const BRAND_NAME = "LottoMind";
+const GROUND_CONTACT_OFFSET = WORLD.groundTop - WORLD.groundY;
+const OBJECT_CONTACT_OFFSET = 10;
+const TUNNEL_CONTACT_Y = WORLD.tunnelTop + 23;
 
 // David Crane's original 32-frame jump curve from the Pitfall source.
 const JUMP_TABLE = [
@@ -1078,39 +1081,100 @@ function updateTick() {
 
 function drawBackdrop() {
   const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, "#061214");
-  gradient.addColorStop(0.45, "#0b2d28");
-  gradient.addColorStop(1, "#1f140b");
+  gradient.addColorStop(0, "#040713");
+  gradient.addColorStop(0.34, "#0b1630");
+  gradient.addColorStop(0.72, "#0a2b2f");
+  gradient.addColorStop(1, "#19071d");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const glow = ctx.createRadialGradient(canvas.width * 0.7, canvas.height * 0.28, 20, canvas.width * 0.7, canvas.height * 0.28, 280);
-  glow.addColorStop(0, "rgba(116, 230, 191, 0.42)");
+  const glow = ctx.createRadialGradient(canvas.width * 0.72, canvas.height * 0.2, 18, canvas.width * 0.72, canvas.height * 0.2, 260);
+  glow.addColorStop(0, "rgba(255, 210, 125, 0.42)");
   glow.addColorStop(1, "rgba(116, 230, 191, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  for (let i = 0; i < 8; i += 1) {
-    const baseX = WORLD.offsetX + 20 + i * 78;
-    const height = 90 + ((i + state.scene.treePat) % 3) * 34;
-    ctx.fillStyle = "rgba(18, 44, 36, 0.86)";
-    ctx.fillRect(baseX, WORLD.offsetY + 8, 18, height);
+  const sideGlow = ctx.createRadialGradient(canvas.width * 0.18, canvas.height * 0.34, 14, canvas.width * 0.18, canvas.height * 0.34, 220);
+  sideGlow.addColorStop(0, "rgba(169, 95, 255, 0.3)");
+  sideGlow.addColorStop(1, "rgba(169, 95, 255, 0)");
+  ctx.fillStyle = sideGlow;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (let i = 0; i < 7; i += 1) {
+    const baseX = WORLD.offsetX - 18 + i * 92 + ((state.scene.treePat + i) % 2) * 12;
+    const trunkWidth = 24 + (i % 2) * 8;
+    const trunkHeight = 174 + ((i + state.scene.treePat) % 3) * 28;
+    const top = WORLD.offsetY - 26;
+    ctx.fillStyle = "rgba(8, 14, 30, 0.92)";
+    ctx.fillRect(baseX, top, trunkWidth, trunkHeight);
+
+    ctx.fillStyle = "rgba(86, 50, 153, 0.26)";
+    ctx.fillRect(baseX + 4, top + 12, 4, trunkHeight - 24);
+    ctx.fillStyle = "rgba(255, 201, 96, 0.18)";
+    ctx.fillRect(baseX + trunkWidth - 7, top + 22, 3, trunkHeight - 42);
+
+    ctx.strokeStyle = i % 2 === 0 ? "rgba(118, 235, 255, 0.24)" : "rgba(255, 201, 96, 0.22)";
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(baseX + 9, WORLD.offsetY + 18, 28 + ((i + state.scene.treePat) % 2) * 10, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(baseX + trunkWidth * 0.34, top + 32);
+    ctx.lineTo(baseX + trunkWidth * 0.34, top + 58);
+    ctx.lineTo(baseX + trunkWidth * 0.78, top + 58);
+    ctx.moveTo(baseX + trunkWidth * 0.58, top + 76);
+    ctx.lineTo(baseX + trunkWidth * 0.58, top + 104);
+    ctx.lineTo(baseX + trunkWidth * 0.18, top + 104);
+    ctx.moveTo(baseX + trunkWidth * 0.4, top + 126);
+    ctx.lineTo(baseX + trunkWidth * 0.4, top + 152);
+    ctx.lineTo(baseX + trunkWidth * 0.84, top + 152);
+    ctx.stroke();
+  }
+
+  const vineColors = ["#64e8ff", "#ad6fff", "#81d861", "#f3c86e"];
+  for (let i = 0; i < 9; i += 1) {
+    const x = WORLD.offsetX + 6 + i * 72;
+    const top = WORLD.offsetY - 22;
+    const length = 48 + ((state.scene.treePat + i) % 5) * 18;
+    const sway = ((i % 2) * 2 - 1) * 6;
+    ctx.strokeStyle = vineColors[i % vineColors.length];
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.bezierCurveTo(x + sway, top + 18, x - sway, top + length - 18, x + sway, top + length);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(6, 12, 28, 0.82)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 2, top);
+    ctx.lineTo(x + sway + 2, top + length);
+    ctx.stroke();
+
+    for (let node = 18; node < length; node += 16) {
+      ctx.fillStyle = vineColors[(i + node) % vineColors.length];
+      ctx.fillRect(x + sway - 2, top + node, 5, 5);
+    }
   }
 }
 
 function drawGround() {
-  ctx.fillStyle = "#4d3a1e";
+  ctx.fillStyle = "#33211b";
   ctx.fillRect(worldX(0), worldY(WORLD.groundTop), WORLD.width * WORLD.scale, 22 * WORLD.scale);
-  ctx.fillStyle = "#9a7539";
-  ctx.fillRect(worldX(0), worldY(WORLD.groundTop), WORLD.width * WORLD.scale, 6 * WORLD.scale);
+  ctx.fillStyle = "#4b2f25";
+  ctx.fillRect(worldX(0), worldY(WORLD.groundTop + 4), WORLD.width * WORLD.scale, 18 * WORLD.scale);
+  ctx.fillStyle = "#7cd64a";
+  ctx.fillRect(worldX(0), worldY(WORLD.groundTop), WORLD.width * WORLD.scale, 4 * WORLD.scale);
+  ctx.fillStyle = "#d7bc62";
+  for (let x = 0; x < WORLD.width; x += 18) {
+    ctx.fillRect(worldX(x + 2), worldY(WORLD.groundTop + 1), 8, 2);
+  }
 
-  ctx.fillStyle = "#1b1c22";
+  ctx.fillStyle = "#111420";
   ctx.fillRect(worldX(0), worldY(WORLD.tunnelTop), WORLD.width * WORLD.scale, 24 * WORLD.scale);
-  ctx.fillStyle = "#52422d";
+  ctx.fillStyle = "#4a295a";
   ctx.fillRect(worldX(0), worldY(WORLD.tunnelTop), WORLD.width * WORLD.scale, 4 * WORLD.scale);
+  ctx.fillStyle = "#2cd8ff";
+  for (let x = 0; x < WORLD.width; x += 22) {
+    ctx.fillRect(worldX(x + 6), worldY(WORLD.tunnelTop + 1), 6, 2);
+  }
 }
 
 function drawHazards() {
@@ -1119,12 +1183,33 @@ function drawHazards() {
     return;
   }
 
-  const fill = state.scene.sceneType === 3 || state.scene.sceneType === 7 ? "#1a5ea5" : "#09090c";
-  bounds.forEach((bound) => {
+  const jackpotPool = state.scene.sceneType === 3 || state.scene.sceneType === 7;
+  bounds.forEach((bound, index) => {
+    const x = worldX(bound[0]);
+    const y = worldY(WORLD.groundTop - 2);
+    const width = (bound[1] - bound[0]) * WORLD.scale;
+    const height = 18 * WORLD.scale;
+    const fill = ctx.createLinearGradient(x, y, x, y + height);
+    if (jackpotPool) {
+      fill.addColorStop(0, "rgba(255, 211, 120, 0.95)");
+      fill.addColorStop(0.22, "rgba(249, 146, 48, 0.78)");
+      fill.addColorStop(1, "rgba(8, 4, 15, 0.96)");
+    } else {
+      fill.addColorStop(0, "rgba(198, 122, 255, 0.95)");
+      fill.addColorStop(0.22, "rgba(114, 55, 180, 0.78)");
+      fill.addColorStop(1, "rgba(6, 3, 12, 0.96)");
+    }
     ctx.fillStyle = fill;
-    ctx.fillRect(worldX(bound[0]), worldY(WORLD.groundTop - 2), (bound[1] - bound[0]) * WORLD.scale, 18 * WORLD.scale);
-    ctx.fillStyle = "rgba(84, 255, 204, 0.18)";
-    ctx.fillRect(worldX(bound[0]), worldY(WORLD.groundTop - 2), (bound[1] - bound[0]) * WORLD.scale, 2 * WORLD.scale);
+    ctx.fillRect(x, y, width, height);
+
+    ctx.strokeStyle = jackpotPool ? "rgba(255, 234, 178, 0.86)" : "rgba(235, 186, 255, 0.82)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, width - 2, height - 2);
+
+    ctx.strokeStyle = jackpotPool ? "rgba(255, 204, 98, 0.32)" : "rgba(208, 123, 255, 0.3)";
+    ctx.beginPath();
+    ctx.ellipse(x + width / 2, y + 18, Math.max(14, width * 0.24), 7 + index, 0, 0, Math.PI * 2);
+    ctx.stroke();
   });
 }
 
@@ -1134,11 +1219,17 @@ function drawLiana() {
   }
 
   const liana = getLianaPosition();
-  ctx.strokeStyle = "#b9985b";
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#76e36a";
+  ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(worldX(80), worldY(8));
   ctx.lineTo(worldX(liana.x), worldY(liana.y));
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(79, 240, 255, 0.34)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(worldX(81), worldY(8));
+  ctx.lineTo(worldX(liana.x + 1), worldY(liana.y));
   ctx.stroke();
   ctx.fillStyle = "#d9b770";
   ctx.beginPath();
@@ -1151,8 +1242,17 @@ function drawLadder() {
     return;
   }
 
-  ctx.strokeStyle = "#b98b4c";
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#5e3f85";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(worldX(WORLD.ladderX - 4), worldY(WORLD.groundTop));
+  ctx.lineTo(worldX(WORLD.ladderX - 4), worldY(WORLD.tunnelTop + 24));
+  ctx.moveTo(worldX(WORLD.ladderX + 4), worldY(WORLD.groundTop));
+  ctx.lineTo(worldX(WORLD.ladderX + 4), worldY(WORLD.tunnelTop + 24));
+  ctx.stroke();
+
+  ctx.strokeStyle = "#ffc85e";
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(worldX(WORLD.ladderX - 4), worldY(WORLD.groundTop));
   ctx.lineTo(worldX(WORLD.ladderX - 4), worldY(WORLD.tunnelTop + 24));
@@ -1162,6 +1262,8 @@ function drawLadder() {
 
   for (let rung = 0; rung < 7; rung += 1) {
     const y = WORLD.groundTop + 6 + rung * 4;
+    ctx.strokeStyle = rung % 2 === 0 ? "#ffce69" : "#74e8ff";
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(worldX(WORLD.ladderX - 4), worldY(y));
     ctx.lineTo(worldX(WORLD.ladderX + 4), worldY(y));
@@ -1169,8 +1271,13 @@ function drawLadder() {
   }
 
   const wallX = state.scene.wallSide === "left" ? 10 : 142;
-  ctx.fillStyle = "#6d4d38";
+  ctx.fillStyle = "#36243f";
   ctx.fillRect(worldX(wallX), worldY(WORLD.tunnelTop), 8 * WORLD.scale, 24 * WORLD.scale);
+  ctx.fillStyle = "#ffc85e";
+  ctx.fillRect(worldX(wallX + 1), worldY(WORLD.tunnelTop + 4), 2 * WORLD.scale, 14 * WORLD.scale);
+  ctx.fillStyle = "#73daff";
+  ctx.fillRect(worldX(wallX + 4), worldY(WORLD.tunnelTop + 9), 2 * WORLD.scale, 2 * WORLD.scale);
+  ctx.fillRect(worldX(wallX + 4), worldY(WORLD.tunnelTop + 15), 2 * WORLD.scale, 2 * WORLD.scale);
 }
 
 function drawCrop(sheet, crop, dx, dy, dw, dh, flip = false) {
@@ -1186,10 +1293,25 @@ function drawCrop(sheet, crop, dx, dy, dw, dh, flip = false) {
   return true;
 }
 
+function cropWorldHeight(crop) {
+  return crop.drawHeight / WORLD.scale;
+}
+
+function drawCropOnBaseline(sheet, crop, centerX, baselineY, flip = false, yOffset = 0) {
+  return drawCrop(
+    sheet,
+    crop,
+    worldX(centerX - crop.anchorX),
+    worldY(baselineY - cropWorldHeight(crop) + yOffset),
+    crop.drawWidth,
+    crop.drawHeight,
+    flip,
+  );
+}
+
 function drawHero() {
   const heroSprite = spriteCrops.hero;
-  const drawX = worldX(state.player.x - heroSprite.anchorX);
-  const drawY = worldY(state.player.y - heroSprite.anchorY + (state.player.stumbleFrames > 0 ? 2 : 0));
+  const heroBaseline = state.player.y + GROUND_CONTACT_OFFSET + (state.player.stumbleFrames > 0 ? 1 : 0);
   const flicker = state.player.invulnerabilityFrames > 0 && state.frameCount % 4 < 2;
   if (flicker) {
     return;
@@ -1197,20 +1319,20 @@ function drawHero() {
 
   ctx.fillStyle = "rgba(9, 18, 21, 0.34)";
   ctx.beginPath();
-  ctx.ellipse(worldX(state.player.x), worldY(state.player.y + 2), 18, 8, 0, 0, Math.PI * 2);
+  ctx.ellipse(worldX(state.player.x), worldY(heroBaseline) - 4, 18, 8, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  const drawn = drawCrop(
+  const drawn = drawCropOnBaseline(
     assets.hero,
     heroSprite,
-    drawX,
-    drawY,
-    heroSprite.drawWidth,
-    heroSprite.drawHeight,
+    state.player.x,
+    heroBaseline,
     state.player.facing < 0,
   );
 
   if (!drawn) {
+    const drawX = worldX(state.player.x - heroSprite.anchorX);
+    const drawY = worldY(heroBaseline - cropWorldHeight(heroSprite));
     ctx.fillStyle = "#d7b07b";
     ctx.fillRect(drawX + 8, drawY + 4, 24, 34);
     ctx.fillStyle = "#533719";
@@ -1219,61 +1341,88 @@ function drawHero() {
 }
 
 function drawLog(object) {
-  ctx.fillStyle = "#5e4521";
-  ctx.fillRect(worldX(object.x - 8), worldY(object.y - 5), 16 * WORLD.scale, 6 * WORLD.scale);
-  ctx.fillStyle = "#79f0d5";
-  ctx.fillRect(worldX(object.x - 8), worldY(object.y - 3), 16 * WORLD.scale, WORLD.scale);
+  const baseline = object.y + OBJECT_CONTACT_OFFSET;
+  const x = worldX(object.x - 9);
+  const y = worldY(baseline) - 24;
+  ctx.fillStyle = "rgba(9, 18, 21, 0.26)";
+  ctx.beginPath();
+  ctx.ellipse(worldX(object.x), worldY(baseline) - 3, 16, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#2b1738";
+  ctx.fillRect(x, y + 6, 76, 20);
+  ctx.fillStyle = "#60347d";
+  ctx.fillRect(x + 4, y + 9, 68, 14);
+  ctx.fillStyle = "#ffc45c";
+  ctx.fillRect(x + 10, y + 12, 48, 2);
+  ctx.fillRect(x + 18, y + 18, 36, 2);
+  ctx.fillStyle = "#42d8ff";
+  ctx.fillRect(x + 60, y + 11, 6, 8);
+  ctx.beginPath();
+  ctx.fillStyle = "#8f6435";
+  ctx.ellipse(x + 7, y + 16, 9, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawFire(object) {
-  const x = worldX(object.x - 6);
-  const y = worldY(object.y - 12);
-  ctx.fillStyle = "#ff9b38";
+  const x = worldX(object.x);
+  const y = worldY(object.y + 2);
+  ctx.fillStyle = "rgba(9, 18, 21, 0.24)";
   ctx.beginPath();
-  ctx.moveTo(x + 24, y);
-  ctx.lineTo(x + 40, y + 22);
-  ctx.lineTo(x + 18, y + 40);
-  ctx.lineTo(x, y + 22);
+  ctx.ellipse(worldX(object.x), worldY(object.y + OBJECT_CONTACT_OFFSET) - 3, 16, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(131, 64, 201, 0.48)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + 34, 28, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffca5f";
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + 18, y + 24);
+  ctx.lineTo(x, y + 42);
+  ctx.lineTo(x - 18, y + 24);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = "#ffe07d";
+  ctx.fillStyle = "#f591ff";
   ctx.beginPath();
-  ctx.moveTo(x + 24, y + 10);
-  ctx.lineTo(x + 33, y + 23);
-  ctx.lineTo(x + 18, y + 31);
-  ctx.lineTo(x + 10, y + 22);
+  ctx.moveTo(x, y + 10);
+  ctx.lineTo(x + 11, y + 25);
+  ctx.lineTo(x, y + 35);
+  ctx.lineTo(x - 11, y + 25);
   ctx.closePath();
   ctx.fill();
 }
 
 function drawTreasure(object) {
   const crop = spriteCrops.reference[object.crop];
+  const baseline = object.y + OBJECT_CONTACT_OFFSET;
   ctx.fillStyle = "rgba(255, 210, 101, 0.14)";
   ctx.beginPath();
-  ctx.arc(worldX(object.x), worldY(object.y - 6), 16, 0, Math.PI * 2);
+  ctx.arc(worldX(object.x), worldY(baseline) - 14, 16, 0, Math.PI * 2);
   ctx.fill();
 
-  const drawn = drawCrop(assets.reference, crop, worldX(object.x - 10), worldY(object.y - 12), 42, 42, false);
+  ctx.fillStyle = "rgba(255, 201, 96, 0.22)";
+  ctx.fillRect(worldX(object.x - 6), worldY(baseline) - 4, 12 * WORLD.scale, 2 * WORLD.scale);
+
+  const drawn = drawCrop(assets.reference, crop, worldX(object.x - 11), worldY(baseline - 12), 44, 44, false);
   if (!drawn) {
     ctx.fillStyle = "#f4c55e";
-    ctx.fillRect(worldX(object.x - 6), worldY(object.y - 6), 12 * WORLD.scale, 10 * WORLD.scale);
+    ctx.fillRect(worldX(object.x - 6), worldY(baseline - 8), 12 * WORLD.scale, 10 * WORLD.scale);
   }
 }
 
 function drawCobra(object) {
   const sprite = spriteCrops.roster.snake;
-  const drawn = drawCrop(
+  const baseline = object.y + OBJECT_CONTACT_OFFSET;
+  const drawn = drawCropOnBaseline(
     assets.roster,
     sprite,
-    worldX(object.x - sprite.anchorX),
-    worldY(object.y - sprite.anchorY + 1),
-    sprite.drawWidth,
-    sprite.drawHeight,
+    object.x,
+    baseline,
     false,
   );
   if (!drawn) {
     ctx.fillStyle = "#5cbf4d";
-    ctx.fillRect(worldX(object.x - 4), worldY(object.y - 12), 8 * WORLD.scale, 14 * WORLD.scale);
+    ctx.fillRect(worldX(object.x - 4), worldY(object.y), 8 * WORLD.scale, 14 * WORLD.scale);
   }
 }
 
@@ -1284,13 +1433,11 @@ function drawCrocs() {
 
   const sprite = spriteCrops.roster.croc;
   CROC_HEADS.forEach((x) => {
-    drawCrop(
+    drawCropOnBaseline(
       assets.roster,
       sprite,
-      worldX(x - sprite.anchorX),
-      worldY(WORLD.groundTop - sprite.anchorY + 1),
-      sprite.drawWidth,
-      sprite.drawHeight,
+      x,
+      WORLD.groundTop + 1,
       false,
     );
   });
@@ -1302,13 +1449,11 @@ function drawScorpion() {
   }
 
   const sprite = spriteCrops.roster.scorpion;
-  drawCrop(
+  drawCropOnBaseline(
     assets.roster,
     sprite,
-    worldX(state.scorpionX - sprite.anchorX),
-    worldY(WORLD.tunnelTop + 8 - sprite.anchorY),
-    sprite.drawWidth,
-    sprite.drawHeight,
+    state.scorpionX,
+    TUNNEL_CONTACT_Y,
     state.scorpionFacing < 0,
   );
 }
@@ -1328,19 +1473,19 @@ function drawObjects() {
 }
 
 function drawSceneInfo() {
-  ctx.fillStyle = "rgba(17, 208, 188, 0.18)";
-  ctx.fillRect(38, 18, 390, 64);
-  ctx.strokeStyle = "rgba(17, 208, 188, 0.26)";
-  ctx.strokeRect(38.5, 18.5, 389, 63);
-  ctx.fillStyle = "rgba(140, 248, 240, 0.92)";
-  ctx.font = "700 14px 'Trebuchet MS'";
-  ctx.fillText(`${BRAND_NAME.toUpperCase()} ARCADE`, 58, 36);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-  ctx.font = "700 22px 'Trebuchet MS'";
-  ctx.fillText(state.scene.name, 58, 58);
-  ctx.font = "14px 'Trebuchet MS'";
-  ctx.fillStyle = "rgba(194, 236, 226, 0.92)";
-  ctx.fillText(`Seed ${state.scene.seed.toString(16).padStart(2, "0").toUpperCase()}  |  ${state.scene.objectLabel}`, 58, 76);
+  ctx.fillStyle = "rgba(7, 8, 22, 0.72)";
+  ctx.fillRect(28, 18, 494, 68);
+  ctx.strokeStyle = "rgba(255, 203, 98, 0.42)";
+  ctx.strokeRect(28.5, 18.5, 493, 67);
+  ctx.fillStyle = "rgba(225, 171, 255, 0.95)";
+  ctx.font = "700 14px Consolas";
+  ctx.fillText("JACKPOT CHASE MODE", 46, 38);
+  ctx.fillStyle = "rgba(255, 212, 114, 0.96)";
+  ctx.font = "700 22px Georgia";
+  ctx.fillText(state.scene.name, 46, 61);
+  ctx.font = "14px Consolas";
+  ctx.fillStyle = "rgba(150, 240, 255, 0.92)";
+  ctx.fillText(`${BRAND_NAME.toUpperCase()} / Seed ${state.scene.seed.toString(16).padStart(2, "0").toUpperCase()} / ${state.scene.objectLabel}`, 46, 80);
 }
 
 function drawScene() {

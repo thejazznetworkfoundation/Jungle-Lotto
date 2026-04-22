@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LottoMind | Pillfall Harry</title>
+  <title>LottoMind | Lotto Minded</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -15,27 +15,40 @@
           <span class="brand-chip">LottoMind Signal Build</span>
           <span class="brand-chip brand-chip--subtle">Cyber Jungle Edition</span>
         </div>
-        <h1>Pillfall Harry</h1>
+        <h1>Lotto Minded</h1>
         <p class="tagline">
           A LottoMind-styled browser remix of Atari Pitfall logic, rebuilt with
           your custom jungle cast, original-style jump timing, assembly-driven
           scene logic, and cleaner hazard reads for the web.
         </p>
       </div>
-      <div class="hero__feature">
-        <p class="hero__feature-label">LottoMind Scene Decode</p>
+      <div class="hero__feature hero__feature--art">
+        <p class="hero__feature-label">Jackpot Chase Visual Direction</p>
+        <img class="hero__feature-art" src="assets/jackpot-chase-preview.png" alt="LottoMind Jackpot Chase Mode boss stage preview art">
         <div class="prescription-pill" id="hero-target-pill">
           <span id="hero-target-label">Jungle Entry</span>
         </div>
         <p class="hero__feature-copy" id="hero-target-copy">
           Scene rules are being pulled from the original assembly tables with a
-          branded LottoMind presentation layer.
+          branded LottoMind presentation layer and the new Vault Run art tone.
         </p>
       </div>
     </header>
 
     <main class="game-layout">
       <section class="stage-card">
+        <div class="stage-card__header">
+          <div>
+            <p class="stage-card__eyebrow">Vault Run Build</p>
+            <h2 class="stage-card__title">Jackpot Chase Mode</h2>
+          </div>
+          <div class="stage-card__gems" aria-hidden="true">
+            <span class="stage-card__gem"></span>
+            <span class="stage-card__gem"></span>
+            <span class="stage-card__gem"></span>
+          </div>
+        </div>
+
         <div class="hud">
           <div class="hud__item">
             <span class="hud__label">Score</span>
@@ -60,7 +73,7 @@
         </div>
 
         <div class="canvas-shell">
-          <canvas id="game" width="720" height="920" aria-label="Pillfall Harry arcade game"></canvas>
+          <canvas id="game" width="720" height="920" aria-label="Lotto Minded arcade game"></canvas>
 
           <div class="overlay" id="start-overlay">
             <div class="overlay__card">
@@ -107,13 +120,31 @@
           </div>
         </div>
 
-        <div class="control-bar">
-          <button class="control-button" data-move="left" aria-label="Move left">Left</button>
-          <button class="control-button control-button--jump" id="jump-button" aria-label="Jump">Jump</button>
-          <button class="control-button" data-move="right" aria-label="Move right">Right</button>
-          <button class="control-button control-button--use" id="use-button" aria-label="Use ladder or release liana">Use</button>
-          <button class="control-button control-button--pause" id="pause-button" aria-label="Pause game">Pause</button>
+        <div class="control-deck" aria-label="On-screen controls">
+          <div class="control-cluster">
+            <span class="control-cluster__label">Movement</span>
+            <div class="dpad">
+              <button class="control-button control-button--move control-button--up" data-move="up" aria-label="Climb up or move up">Up</button>
+              <button class="control-button control-button--move control-button--left" data-move="left" aria-label="Move left">Left</button>
+              <button class="control-button control-button--move control-button--down" data-move="down" aria-label="Climb down or move down">Down</button>
+              <button class="control-button control-button--move control-button--right" data-move="right" aria-label="Move right">Right</button>
+            </div>
+          </div>
+
+          <div class="control-cluster control-cluster--actions">
+            <span class="control-cluster__label">Actions</span>
+            <div class="action-pad">
+              <button class="control-button control-button--jump" id="jump-button" aria-label="Jump">Jump</button>
+              <button class="control-button control-button--use" id="use-button" aria-label="Use ladder or release liana">Use</button>
+              <button class="control-button control-button--pause" id="pause-button" aria-label="Pause game">Pause</button>
+            </div>
+          </div>
         </div>
+        <p class="control-hint">
+          Touch controls stay on screen at all times. Use <strong>Up</strong>
+          and <strong>Down</strong> on ladders, <strong>Jump</strong> to clear
+          hazards, and <strong>Use</strong> to catch or release the vine.
+        </p>
       </section>
 
       <aside class="info-card">
@@ -128,12 +159,20 @@
           <img class="roster-preview" src="assets/lottomind-main-hero-clean.png" alt="Main LottoMind hero character">
         </div>
 
+        <div class="info-card__block info-card__block--art">
+          <p class="info-card__eyebrow">Vault Run Boards</p>
+          <div class="art-grid">
+            <img class="art-card" src="assets/vault-run-sheet.png" alt="LottoMind Vault Run character and sprite placement sheet">
+            <img class="art-card" src="assets/jackpot-chase-preview.png" alt="LottoMind Jackpot Chase Mode boss stage preview">
+          </div>
+        </div>
+
         <div class="info-card__block">
           <p class="info-card__eyebrow">Tuned Feel</p>
           <ul class="tip-list">
-            <li>Jumping now keeps a tiny early steer window, which better matches the original croc-jump feel.</li>
-            <li>Hole scenes drop Harry into the tunnel, and underground travel still skips three scenes at a time.</li>
-            <li>The new LottoMind cast sheet is now driving the hero, crocs, cobra, and scorpion sprites in-game.</li>
+            <li>The touch deck now includes a full ladder-ready movement pad instead of only left and right buttons.</li>
+            <li>Stage chrome and canvas colors are being pushed toward the purple-and-gold jackpot chase boards you supplied.</li>
+            <li>The LottoMind cast sheet is driving the hero, crocs, cobra, and scorpion sprites in-game.</li>
           </ul>
         </div>
 
